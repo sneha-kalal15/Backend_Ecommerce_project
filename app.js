@@ -3,9 +3,11 @@ const express=require('express')
 const cors=require('cors')
 const bcrypt=require('bcrypt')
 const jwt=require('jsonwebtoken')
+const helmet=require('helmet')
 const {rateLimit}=require('express-rate-limit')
 const app=express();
 const dotenv=require('dotenv')
+const nodemailer=require('nodemailer')
 dotenv.config();
 const port=process.env.Port
 let screatkey=process.env.secretkey
@@ -32,7 +34,7 @@ const productsmodel= mongoose.model('products',productschema)
 
 const limiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	limit: 10, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
+	limit: 10000, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
 	standardHeaders: 'draft-8', // draft-6: `RateLimit-*` headers; draft-7 & draft-8: combined `RateLimit` header
 	legacyHeaders: false, // Disable the `X-RateLimit-*` headers.
 	ipv6Subnet: 56, // Set to 60 or 64 to be less aggressive, or 52 or 48 to be more aggressive
@@ -51,6 +53,7 @@ const usersmodel= mongoose.model('users',usersschema)
 
 ////middleware
 app.use(cors())
+app.use(helmet())
 
 app.use(limiter)
 
@@ -98,6 +101,24 @@ app.listen(port,async()=>{
       const{title,price,image}=req.body
       await productsmodel.create({title,price,image})
       res.status(201).json({msg:"products are added successfully"})
+      let transporter=await nodemailer.createTransport({
+      service:'gmail',
+      auth:{
+        user:process.env.GMAIL_USER,
+        pass:process.env.GMAIL_APP_PASSWORD
+      }
+    })
+    let mailOptions={
+      from:process.env.GMAIL_USER,
+      to:'chrohankumar@12345@gmail.com',
+      subject:'PRODUCT UPDATE',
+      html:`A new product is added in our store`
+    }
+
+    transporter.sendMail(mailOptions,(err)=>{
+      if(err) throw err
+      console.log('email sent successfully')
+    })
     }catch(error){
       res.json({
         msg:error.message
@@ -134,6 +155,21 @@ app.delete('/products',async(req,res)=>{
   }
 })
 
+app.get('/products/:id',async(req,res)=>{
+  id=req.params.id
+  letsingleproduct=await productsmodel.findById(id)
+  res.json(singleproduct)
+})
+app.get('/details',(req,res)=>{
+  let location=req.query.location;
+  let age=req.query.age
+  res.send(`this person is living in goa ${location}and age is 30 ${age}`)
+}
+
+  )
+
+
+
 app.put('/products',async(req,res)=>{
   try{
    let products= await productsmodel.findByIdAndUpdate("69575fd49239f09a2efdd0f4" ,{price:150})
@@ -167,6 +203,25 @@ app.post('/register',async(req,res)=>{
       let hashedpassword= await bcrypt.hash(password,10)
     await usersmodel.create({email,username,password:hashedpassword})
     res.status(201).json({msg:"user registered successfully"})
+    
+  let transporter=await nodemailer.createTransport({
+      service:'gmail',
+      auth:{
+        user:process.env.GMAIL_USER,
+        pass:process.env.GMAIL_APP_PASSWORD
+      }
+    })
+    let mailOptions={
+      from:process.env.GMAIL_USER,
+      to:email,
+      subject:'ACOOUNT REGISTRATION',
+      html:`hi ${username} your accout is created sucessfully`
+    }
+
+    transporter.sendMail(mailOptions,(err)=>{
+      if(err) throw err
+      console.log('email sent successfully')
+    })
 
   }catch(err){
     res.json({
@@ -190,6 +245,7 @@ app.post('/login',async(req,res)=>{
   let token= jwt.sign(payload,screatkey,{expiresIn:'1h'})
   res.json({msg:"login successful",token:token
   }) 
+  
  } catch(err){
     res.json({
       msg:err.message
